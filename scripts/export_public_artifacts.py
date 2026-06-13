@@ -316,16 +316,16 @@ def run_public_export_stage(settings: AppSettings) -> dict[str, Path]:
         encoding="utf-8",
     )
     return {
-        "public_attention": public_attention_path,
-        "summary": summary_path,
-        "site_data": site_data_path,
+        "public_jsonl": public_attention_path,
+        "summary_markdown": summary_path,
+        "site_snapshot": site_data_path,
     }
 
 
 def main() -> None:
     settings = AppSettings.from_env()
     outputs = run_public_export_stage(settings)
-    print(f"public artifacts exported to {outputs['summary'].parent}")
+    print(f"public artifacts exported to {outputs['summary_markdown'].parent}")
 
 
 if __name__ == "__main__":
