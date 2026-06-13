@@ -5,6 +5,7 @@ import pytest
 
 from src.bronze.writers import write_jsonl_rows
 from src.config.settings import AppSettings
+from src.orchestration import pipeline_runner
 from src.orchestration.pipeline_runner import run_pipeline, validate_stage_outputs
 
 
@@ -28,13 +29,19 @@ def tmp_path() -> Path:
 
 
 def _install_stage_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
+    def resolve_output(path_str: str) -> Path:
+        path = Path(path_str)
+        if path.is_absolute():
+            return path
+        return pipeline_runner.PROJECT_ROOT / path
+
     def stub_run_bronze_stage(*, settings: AppSettings) -> Path:
-        output_path = Path(settings.bronze_output_dir) / "public_sources.jsonl"
+        output_path = resolve_output(settings.bronze_output_dir) / "public_sources.jsonl"
         write_jsonl_rows(output_path, [{"source_name": "stub"}])
         return output_path
 
     def stub_run_silver_stage(settings: AppSettings) -> dict[str, Path]:
-        root = Path(settings.silver_output_dir)
+        root = resolve_output(settings.silver_output_dir)
         outputs = {
             "market": root / "market.jsonl",
             "derivatives": root / "derivatives.jsonl",
@@ -46,7 +53,7 @@ def _install_stage_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
         return outputs
 
     def stub_run_features_stage(settings: AppSettings) -> dict[str, Path]:
-        root = Path(settings.features_output_dir)
+        root = resolve_output(settings.features_output_dir)
         outputs = {
             "market": root / "market_features.jsonl",
             "derivatives": root / "derivatives_features.jsonl",
@@ -76,7 +83,7 @@ def _install_stage_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
         return outputs
 
     def stub_run_gold_stage(settings: AppSettings) -> dict[str, Path]:
-        root = Path(settings.gold_output_dir)
+        root = resolve_output(settings.gold_output_dir)
         outputs = {
             "attention": root / "attention.jsonl",
             "drivers": root / "drivers.jsonl",
@@ -138,3 +145,42 @@ def test_run_pipeline_smoke_writes_manifest_and_site_data(tmp_path: Path, monkey
 
     assert manifest_path.exists()
     assert (Path(settings.site_output_dir) / "site_data.js").exists()
+
+
+def test_run_pipeline_resolves_relative_settings_against_repo_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _install_stage_stubs(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+    relative_root = Path(".pytest_tmp") / f"relative-{tmp_path.name}"
+    settings = AppSettings(
+        bronze_output_dir=str(relative_root / "artifacts" / "bronze"),
+        silver_output_dir=str(relative_root / "artifacts" / "silver"),
+        features_output_dir=str(relative_root / "artifacts" / "features"),
+        gold_output_dir=str(relative_root / "artifacts" / "gold"),
+        public_export_dir=str(relative_root / "artifacts" / "public"),
+        site_output_dir=str(relative_root / "site"),
+    )
+
+    manifest_path = run_pipeline(settings=settings)
+
+    expected_manifest_path = pipeline_runner.PROJECT_ROOT / relative_root / "artifacts" / "public" / "run_manifest.json"
+    expected_site_data_path = pipeline_runner.PROJECT_ROOT / relative_root / "site" / "site_data.js"
+    assert manifest_path == expected_manifest_path
+    assert expected_manifest_path.exists()
+    assert expected_site_data_path.exists()
+
+
+def test_run_pipeline_rejects_stale_outputs_from_noop_stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    settings = _build_settings(tmp_path)
+    stale_output = Path(settings.bronze_output_dir) / "public_sources.jsonl"
+    write_jsonl_rows(stale_output, [{"source_name": "stale"}])
+
+    def noop_bronze_stage(*, settings: AppSettings) -> Path:
+        return Path(settings.bronze_output_dir) / "public_sources.jsonl"
+
+    monkeypatch.setattr("src.orchestration.pipeline_runner.run_bronze_stage", noop_bronze_stage)
+
+    with pytest.raises(FileNotFoundError, match="bronze"):
+        run_pipeline(settings=settings)

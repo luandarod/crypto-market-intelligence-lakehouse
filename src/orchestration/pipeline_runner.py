@@ -2,6 +2,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from scripts.export_public_artifacts import run_public_export_stage
 from scripts.run_bronze import run_bronze_stage
@@ -10,6 +11,8 @@ from scripts.run_gold import run_gold_stage
 from scripts.run_silver import run_silver_stage
 from src.config.settings import AppSettings
 from src.orchestration.contracts import build_artifact_contracts
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,12 @@ class RunManifest:
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _resolve_output_path(path: Path) -> Path:
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
 
 
 def validate_stage_outputs(stage_name: str, outputs: list[Path]) -> None:
@@ -57,7 +66,18 @@ def _stage_record(stage_name: str, outputs: list[Path], *, started_at: str, fini
     )
 
 
-def _run_stage(stage_name: str, outputs: list[Path], *, runner) -> StageRunRecord:
+def _resolve_contract_outputs(contract) -> list[Path]:
+    return [_resolve_output_path(path) for path in contract.resolve_outputs()]
+
+
+def _prepare_stage_outputs(outputs: list[Path]) -> None:
+    for path in outputs:
+        if path.exists():
+            path.unlink()
+
+
+def _run_stage(stage_name: str, outputs: list[Path], *, runner: Callable[[], object]) -> StageRunRecord:
+    _prepare_stage_outputs(outputs)
     started_at = _utc_now_iso()
     runner()
     validate_stage_outputs(stage_name, outputs)
@@ -73,43 +93,43 @@ def run_pipeline(settings: AppSettings | None = None) -> Path:
     stage_records = [
         _run_stage(
             "bronze",
-            contracts["bronze"].resolve_outputs(),
+            _resolve_contract_outputs(contracts["bronze"]),
             runner=lambda: run_bronze_stage(settings=resolved_settings),
         ),
         _run_stage(
             "silver",
-            contracts["silver"].resolve_outputs(),
+            _resolve_contract_outputs(contracts["silver"]),
             runner=lambda: run_silver_stage(resolved_settings),
         ),
         _run_stage(
             "features",
-            contracts["features"].resolve_outputs(),
+            _resolve_contract_outputs(contracts["features"]),
             runner=lambda: run_features_stage(resolved_settings),
         ),
         _run_stage(
             "gold",
-            contracts["gold"].resolve_outputs(),
+            _resolve_contract_outputs(contracts["gold"]),
             runner=lambda: run_gold_stage(resolved_settings),
         ),
     ]
 
-    manifest_path = contracts["public"].root / "run_manifest.json"
+    public_outputs = _resolve_contract_outputs(contracts["public"])
+    manifest_path = _resolve_output_path(contracts["public"].root / "run_manifest.json")
+    site_data_path = _resolve_contract_outputs(contracts["site"])[0]
     public_stage_outputs = [
-        contracts["public"].root / "crypto_attention_public.jsonl",
-        contracts["public"].root / "crypto-market-intelligence-summary.md",
-        manifest_path,
-        contracts["site"].root / "site_data.js",
+        path for path in public_outputs if path != manifest_path
     ]
+    public_stage_outputs.append(site_data_path)
+    _prepare_stage_outputs([*public_stage_outputs, manifest_path])
     public_started_at = _utc_now_iso()
     run_public_export_stage(resolved_settings)
-    validate_stage_outputs("public", [path for path in public_stage_outputs if path != manifest_path])
+    validate_stage_outputs("public", public_stage_outputs)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    public_finished_at = _utc_now_iso()
     public_record = _stage_record(
         "public",
         public_stage_outputs,
         started_at=public_started_at,
-        finished_at=public_finished_at,
+        finished_at=_utc_now_iso(),
     )
     manifest = RunManifest(
         run_id=run_id,
@@ -118,5 +138,5 @@ def run_pipeline(settings: AppSettings | None = None) -> Path:
     )
     manifest_path.write_text(json.dumps(asdict(manifest), indent=2) + "\n", encoding="utf-8")
 
-    validate_stage_outputs("public", contracts["public"].resolve_outputs())
+    validate_stage_outputs("public_manifest", public_outputs)
     return manifest_path
