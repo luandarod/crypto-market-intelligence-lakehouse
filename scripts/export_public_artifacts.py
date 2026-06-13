@@ -270,8 +270,7 @@ def resolve_export_roots(settings: AppSettings, *, project_root: Path = PROJECT_
     }
 
 
-def main() -> None:
-    settings = AppSettings.from_env()
+def run_public_export_stage(settings: AppSettings) -> dict[str, Path]:
     roots = resolve_export_roots(settings, project_root=PROJECT_ROOT)
     gold_root = roots["gold"]
     features_root = roots["features"]
@@ -294,7 +293,8 @@ def main() -> None:
     ]
 
     outputs_root = roots["public"]
-    write_jsonl_rows(outputs_root / "crypto_attention_public.jsonl", public_rows)
+    public_attention_path = outputs_root / "crypto_attention_public.jsonl"
+    write_jsonl_rows(public_attention_path, public_rows)
 
     summary_path = outputs_root / "crypto-market-intelligence-summary.md"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
@@ -315,7 +315,17 @@ def main() -> None:
         ),
         encoding="utf-8",
     )
-    print(f"public artifacts exported to {outputs_root}")
+    return {
+        "public_attention": public_attention_path,
+        "summary": summary_path,
+        "site_data": site_data_path,
+    }
+
+
+def main() -> None:
+    settings = AppSettings.from_env()
+    outputs = run_public_export_stage(settings)
+    print(f"public artifacts exported to {outputs['summary'].parent}")
 
 
 if __name__ == "__main__":

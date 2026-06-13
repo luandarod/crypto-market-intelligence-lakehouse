@@ -1,8 +1,18 @@
 from pathlib import Path
+import tempfile
 
+import pytest
 from scripts.export_public_artifacts import resolve_export_roots
 from src.config.settings import AppSettings
 from src.publish.export_gold import build_public_attention_record
+
+
+@pytest.fixture
+def tmp_path() -> Path:
+    root = Path.cwd() / ".pytest_tmp"
+    root.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=root) as temp_dir:
+        yield Path(temp_dir)
 
 
 def test_public_attention_record_hides_internal_noise():
