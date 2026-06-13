@@ -9,6 +9,10 @@ class AppSettings(BaseModel):
     defillama_base_url: str = "https://api.llama.fi"
     public_export_dir: str = "artifacts/public"
     bronze_output_dir: str = "artifacts/bronze"
+    silver_output_dir: str = "artifacts/silver"
+    features_output_dir: str = "artifacts/features"
+    gold_output_dir: str = "artifacts/gold"
+    site_output_dir: str = "site"
     public_ssl_verify: bool = True
 
     @classmethod
@@ -21,5 +25,9 @@ class AppSettings(BaseModel):
             defillama_base_url=os.getenv("DEFILLAMA_BASE_URL", "https://api.llama.fi"),
             public_export_dir=os.getenv("PUBLIC_EXPORT_DIR", "artifacts/public"),
             bronze_output_dir=os.getenv("BRONZE_OUTPUT_DIR", "artifacts/bronze"),
+            silver_output_dir=os.getenv("SILVER_OUTPUT_DIR", "artifacts/silver"),
+            features_output_dir=os.getenv("FEATURES_OUTPUT_DIR", "artifacts/features"),
+            gold_output_dir=os.getenv("GOLD_OUTPUT_DIR", "artifacts/gold"),
+            site_output_dir=os.getenv("SITE_OUTPUT_DIR", "site"),
             public_ssl_verify=ssl_verify,
         )
