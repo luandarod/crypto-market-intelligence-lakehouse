@@ -5,11 +5,11 @@ import sys
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-WORKSPACE_ROOT = PROJECT_ROOT.parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.bronze.writers import read_jsonl_rows, write_jsonl_rows
+from src.config.settings import AppSettings
 from src.publish.export_gold import build_public_attention_record
 
 
@@ -255,9 +255,26 @@ def build_site_data_script(payload: dict) -> str:
     return "window.CMIL_SITE_DATA = " + json.dumps(payload, indent=2) + ";\n"
 
 
+def resolve_export_roots(settings: AppSettings, *, project_root: Path = PROJECT_ROOT) -> dict[str, Path]:
+    def resolve_root(value: str) -> Path:
+        root = Path(value)
+        if root.is_absolute():
+            return root
+        return project_root / root
+
+    return {
+        "gold": resolve_root(settings.gold_output_dir),
+        "features": resolve_root(settings.features_output_dir),
+        "public": resolve_root(settings.public_export_dir),
+        "site": resolve_root(settings.site_output_dir),
+    }
+
+
 def main() -> None:
-    gold_root = PROJECT_ROOT / "artifacts" / "gold"
-    features_root = PROJECT_ROOT / "artifacts" / "features"
+    settings = AppSettings.from_env()
+    roots = resolve_export_roots(settings, project_root=PROJECT_ROOT)
+    gold_root = roots["gold"]
+    features_root = roots["features"]
     attention_rows = read_jsonl_rows(gold_root / "attention.jsonl")
     driver_rows = read_jsonl_rows(gold_root / "drivers.jsonl")
     narrative_rows = read_jsonl_rows(gold_root / "narratives.jsonl")
@@ -276,14 +293,14 @@ def main() -> None:
         for row in attention_rows
     ]
 
-    outputs_root = WORKSPACE_ROOT / "outputs"
+    outputs_root = roots["public"]
     write_jsonl_rows(outputs_root / "crypto_attention_public.jsonl", public_rows)
 
     summary_path = outputs_root / "crypto-market-intelligence-summary.md"
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(build_portfolio_report(attention_rows, narrative_rows), encoding="utf-8")
 
-    site_root = PROJECT_ROOT / "site"
+    site_root = roots["site"]
     site_root.mkdir(parents=True, exist_ok=True)
     site_data_path = site_root / "site_data.js"
     site_data_path.write_text(
