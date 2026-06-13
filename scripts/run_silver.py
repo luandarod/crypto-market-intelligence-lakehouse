@@ -42,16 +42,26 @@ def build_silver_outputs(bronze_rows: list[dict]) -> dict[str, list[dict]]:
     return outputs
 
 
-def main() -> None:
-    settings = AppSettings.from_env()
+def run_silver_stage(settings: AppSettings) -> dict[str, Path]:
     bronze_path = PROJECT_ROOT / settings.bronze_output_dir / "public_sources.jsonl"
     bronze_rows = read_jsonl_rows(bronze_path)
     outputs = build_silver_outputs(bronze_rows)
-    silver_root = PROJECT_ROOT / "artifacts" / "silver"
-    write_jsonl_rows(silver_root / "market.jsonl", outputs["market"])
-    write_jsonl_rows(silver_root / "derivatives.jsonl", outputs["derivatives"])
-    write_jsonl_rows(silver_root / "onchain.jsonl", outputs["onchain"])
-    print(f"silver outputs saved to {silver_root}")
+    silver_root = PROJECT_ROOT / settings.silver_output_dir
+    paths = {
+        "market": silver_root / "market.jsonl",
+        "derivatives": silver_root / "derivatives.jsonl",
+        "onchain": silver_root / "onchain.jsonl",
+    }
+    write_jsonl_rows(paths["market"], outputs["market"])
+    write_jsonl_rows(paths["derivatives"], outputs["derivatives"])
+    write_jsonl_rows(paths["onchain"], outputs["onchain"])
+    return paths
+
+
+def main() -> None:
+    settings = AppSettings.from_env()
+    paths = run_silver_stage(settings)
+    print(f"silver outputs saved to {Path(settings.silver_output_dir)}")
 
 
 if __name__ == "__main__":

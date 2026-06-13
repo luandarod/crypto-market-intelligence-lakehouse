@@ -7,6 +7,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.bronze.writers import read_jsonl_rows, write_jsonl_rows
+from src.config.settings import AppSettings
 from src.domain.asset_universe import is_supported_asset, should_exclude_asset
 from src.gold.attention_engine import build_attention_row, compute_attention_score
 from src.gold.explanations import build_driver_flags
@@ -171,19 +172,30 @@ def build_gold_outputs(feature_rows: dict[str, list[dict]]) -> dict[str, list[di
     }
 
 
-def main() -> None:
-    feature_root = PROJECT_ROOT / "artifacts" / "features"
+def run_gold_stage(settings: AppSettings) -> dict[str, Path]:
+    feature_root = PROJECT_ROOT / settings.features_output_dir
     feature_rows = {
         "market": read_jsonl_rows(feature_root / "market_features.jsonl"),
         "derivatives": read_jsonl_rows(feature_root / "derivatives_features.jsonl"),
         "onchain": read_jsonl_rows(feature_root / "onchain_features.jsonl"),
     }
     outputs = build_gold_outputs(feature_rows)
-    gold_root = PROJECT_ROOT / "artifacts" / "gold"
-    write_jsonl_rows(gold_root / "attention.jsonl", outputs["attention"])
-    write_jsonl_rows(gold_root / "drivers.jsonl", outputs["drivers"])
-    write_jsonl_rows(gold_root / "narratives.jsonl", outputs["narratives"])
-    print(f"gold outputs saved to {gold_root}")
+    gold_root = PROJECT_ROOT / settings.gold_output_dir
+    paths = {
+        "attention": gold_root / "attention.jsonl",
+        "drivers": gold_root / "drivers.jsonl",
+        "narratives": gold_root / "narratives.jsonl",
+    }
+    write_jsonl_rows(paths["attention"], outputs["attention"])
+    write_jsonl_rows(paths["drivers"], outputs["drivers"])
+    write_jsonl_rows(paths["narratives"], outputs["narratives"])
+    return paths
+
+
+def main() -> None:
+    settings = AppSettings.from_env()
+    run_gold_stage(settings)
+    print(f"gold outputs saved to {Path(settings.gold_output_dir)}")
 
 
 if __name__ == "__main__":

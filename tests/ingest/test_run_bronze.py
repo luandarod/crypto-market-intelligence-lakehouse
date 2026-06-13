@@ -1,10 +1,24 @@
+from pathlib import Path
+import tempfile
+
+import pytest
 import requests
 
 from scripts.run_bronze import (
     DERIVATIVES_SYMBOLS,
     MARKET_SNAPSHOT_PAGE_SIZE,
     collect_public_bronze_rows,
+    run_bronze_stage,
 )
+from src.config.settings import AppSettings
+
+
+@pytest.fixture
+def tmp_path() -> Path:
+    root = Path.cwd() / ".pytest_tmp"
+    root.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=root) as temp_dir:
+        yield Path(temp_dir)
 
 
 class StubCoinGeckoClient:
@@ -87,3 +101,17 @@ def test_collect_public_bronze_rows_keeps_partial_binance_success():
     funding_rows = [row for row in rows if row["endpoint_name"] == "funding_rate"]
     assert len(open_interest_rows) == len(DERIVATIVES_SYMBOLS)
     assert funding_rows == []
+
+
+def test_run_bronze_stage_writes_contract_output(tmp_path: Path):
+    settings = AppSettings(bronze_output_dir=str(tmp_path / "artifacts" / "bronze"))
+
+    output_path = run_bronze_stage(
+        settings=settings,
+        coingecko=StubCoinGeckoClient(),
+        binance=StubBinanceClient(),
+        defillama=StubDefiLlamaClient(),
+    )
+
+    assert output_path == Path(settings.bronze_output_dir) / "public_sources.jsonl"
+    assert output_path.exists()

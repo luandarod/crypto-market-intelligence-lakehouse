@@ -82,15 +82,26 @@ def collect_public_bronze_rows(
     return rows
 
 
-def main() -> None:
-    settings = AppSettings.from_env()
+def run_bronze_stage(
+    *,
+    settings: AppSettings,
+    coingecko: CoinGeckoClient | None = None,
+    binance: BinanceClient | None = None,
+    defillama: DefiLlamaClient | None = None,
+) -> Path:
     rows = collect_public_bronze_rows(
-        coingecko=CoinGeckoClient(base_url=settings.coingecko_base_url, verify_ssl=settings.public_ssl_verify),
-        binance=BinanceClient(base_url=settings.binance_base_url, verify_ssl=settings.public_ssl_verify),
-        defillama=DefiLlamaClient(base_url=settings.defillama_base_url, verify_ssl=settings.public_ssl_verify),
+        coingecko=coingecko or CoinGeckoClient(base_url=settings.coingecko_base_url, verify_ssl=settings.public_ssl_verify),
+        binance=binance or BinanceClient(base_url=settings.binance_base_url, verify_ssl=settings.public_ssl_verify),
+        defillama=defillama or DefiLlamaClient(base_url=settings.defillama_base_url, verify_ssl=settings.public_ssl_verify),
     )
     output_path = PROJECT_ROOT / settings.bronze_output_dir / "public_sources.jsonl"
     write_jsonl_rows(output_path, rows)
+    return output_path
+
+
+def main() -> None:
+    settings = AppSettings.from_env()
+    output_path = run_bronze_stage(settings=settings)
     print(f"bronze snapshot saved to {output_path}")
 
 
