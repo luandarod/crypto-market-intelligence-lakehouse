@@ -22,6 +22,11 @@ def test_build_artifact_contracts_exposes_stage_outputs(tmp_path: Path) -> None:
         "derivatives.jsonl",
         "onchain.jsonl",
     ]
+    assert contracts["features"].required_files == [
+        "market_features.jsonl",
+        "derivatives_features.jsonl",
+        "onchain_features.jsonl",
+    ]
     assert contracts["gold"].required_files == [
         "attention.jsonl",
         "drivers.jsonl",
@@ -32,3 +37,10 @@ def test_build_artifact_contracts_exposes_stage_outputs(tmp_path: Path) -> None:
         "crypto-market-intelligence-summary.md",
         "run_manifest.json",
     ]
+    assert contracts["site"].required_files == ["site_data.js"]
+    assert contracts["features"].resolve_outputs() == [
+        tmp_path / "artifacts" / "features" / "market_features.jsonl",
+        tmp_path / "artifacts" / "features" / "derivatives_features.jsonl",
+        tmp_path / "artifacts" / "features" / "onchain_features.jsonl",
+    ]
+    assert contracts["site"].resolve_outputs() == [tmp_path / "site" / "site_data.js"]
