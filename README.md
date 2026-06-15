@@ -41,6 +41,7 @@ Main scripts:
 - `scripts/run_features.py`
 - `scripts/run_gold.py`
 - `scripts/export_public_artifacts.py`
+- `scripts/run_pipeline.py`
 
 ## Repository Structure
 
@@ -85,7 +86,20 @@ The initial universe is curated on purpose so the output feels like a research p
 1. Create and activate a Python 3.11 environment.
 2. Install dependencies with `pip install -e .`
 3. Run tests with `pytest tests -v`
-4. Run the pipeline:
+4. Run the canonical local pipeline:
+
+```powershell
+python scripts/run_pipeline.py
+```
+
+This canonical entrypoint executes the full `bronze -> silver -> features -> gold -> public` flow and writes:
+
+- stage artifacts under `artifacts/`
+- public exports under `artifacts/public/`
+- a microsite snapshot at `site/site_data.js`
+- a run manifest at `artifacts/public/run_manifest.json`
+
+If you want to run individual stages instead, use:
 
 ```powershell
 python scripts/run_bronze.py
@@ -109,7 +123,7 @@ Important files:
 - [`site/site_data.js`](site/site_data.js)
 - [`site/README.md`](site/README.md)
 
-Whenever you rerun `python scripts/export_public_artifacts.py`, the embedded microsite snapshot is refreshed together with the local public exports.
+Whenever you rerun `python scripts/run_pipeline.py` or `python scripts/export_public_artifacts.py`, the embedded microsite snapshot is refreshed together with the local public exports.
 
 For Vercel deployment, the repo includes [`vercel.json`](vercel.json).
 
@@ -117,7 +131,13 @@ The repository also includes an automated GitHub Actions refresh workflow in [`.
 
 ## Local Public Exports
 
-The script `scripts/export_public_artifacts.py` also writes local portfolio outputs outside the repository working tree. Those workspace-level files are useful during development, but the committed public artifact inside the repo is `site/site_data.js`, which powers the microsite.
+The canonical runner writes public-facing artifacts into `artifacts/public/`, including:
+
+- `crypto_attention_public.jsonl`
+- `crypto-market-intelligence-summary.md`
+- `run_manifest.json`
+
+The committed public artifact inside the repo remains `site/site_data.js`, which powers the microsite and app surfaces.
 
 ## Databricks Direction
 

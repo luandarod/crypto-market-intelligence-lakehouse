@@ -11,8 +11,10 @@ This project should be published in layers so it reads like a real platform:
 ## What Already Exists
 
 - A repo scaffold with pipeline code, tests, and Databricks bundle placeholders
-- Public exports in `outputs/`
+- Public exports in `artifacts/public/`
 - Editorial summary generation via `scripts/export_public_artifacts.py`
+- A canonical local runner in `scripts/run_pipeline.py`
+- A run manifest in `artifacts/public/run_manifest.json`
 
 ## Recommended Public Surface
 
@@ -29,7 +31,7 @@ The repo should lead with:
 
 ### Portfolio Case Study
 
-Use the exported summary in `outputs/crypto-market-intelligence-summary.md` as the seed for:
+Use the exported summary in `artifacts/public/crypto-market-intelligence-summary.md` as the seed for:
 
 - a portfolio page
 - a Notion case study
@@ -44,12 +46,21 @@ The page should emphasize:
 
 ### Public Data Sample
 
-Publish `outputs/crypto_attention_public.jsonl` as a lightweight sample of the gold layer.
+Publish `artifacts/public/crypto_attention_public.jsonl` as a lightweight sample of the gold layer.
+
+### Operational Credibility Layer
+
+The public surface should also point to the execution layer:
+
+- `scripts/run_pipeline.py` as the canonical local entrypoint
+- `artifacts/public/run_manifest.json` as proof of stage-level orchestration
+- `site/site_data.js` as the exported payload used by both the case-study page and the embedded app
 
 ## Suggested Sequence
 
-1. Finalize repository docs
-2. Add visual architecture and sample output excerpts
-3. Publish repo
-4. Build a lightweight public page on top of the exported outputs
-5. Later, replace local artifacts with fuller Databricks execution screenshots or Delta-backed runs
+1. Run `python scripts/run_pipeline.py` to refresh the full local execution chain
+2. Finalize repository docs around the canonical run flow and exported artifacts
+3. Add visual architecture and sample output excerpts
+4. Publish repo
+5. Promote the public page and embedded app built on top of `site/site_data.js`
+6. Later, replace local artifacts with fuller Databricks execution screenshots or Delta-backed runs
