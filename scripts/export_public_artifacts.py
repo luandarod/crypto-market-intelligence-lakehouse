@@ -169,12 +169,68 @@ def build_portfolio_report(attention_rows: list[dict], narrative_rows: list[dict
     )
 
 
+def build_driver_mix(attention_rows: list[dict]) -> dict:
+    counts = {
+        "derivatives_positioning": 0,
+        "onchain_confirmation": 0,
+        "volume_strength": 0,
+    }
+    for row in attention_rows:
+        driver = row.get("top_driver")
+        if driver in counts:
+            counts[driver] += 1
+
+    total_assets = len(attention_rows)
+    shares = {
+        name: (0.0 if total_assets == 0 else round(count / total_assets, 4))
+        for name, count in counts.items()
+    }
+    leading_name = max(counts, key=counts.get) if counts else None
+    leading_count = counts.get(leading_name, 0) if leading_name else 0
+    leading_share = shares.get(leading_name, 0.0) if leading_name else 0.0
+    return {
+        "counts": counts,
+        "shares": shares,
+        "leading_driver": {
+            "name": leading_name,
+            "count": leading_count,
+            "share": leading_share,
+        },
+    }
+
+
+def build_narrative_health_rows(
+    attention_rows: list[dict],
+    narrative_explorer_rows: list[dict],
+) -> list[dict]:
+    attention_index = {row["symbol"]: row for row in attention_rows}
+    rows: list[dict] = []
+    for row in narrative_explorer_rows[:8]:
+        leader_symbol = row.get("leader_symbol")
+        leader_row = attention_index.get(leader_symbol, {})
+        rows.append(
+            {
+                "narrative": row["narrative"],
+                "asset_count": row["asset_count"],
+                "leader_symbol": leader_symbol,
+                "leader_driver": leader_row.get("top_driver"),
+                "leader_regime": leader_row.get("regime_tag"),
+                "avg_attention_score": row["avg_attention_score"],
+                "avg_confirmation_score": row["avg_confirmation_score"],
+            }
+        )
+    return rows
+
+
 def build_site_payload(
     attention_rows: list[dict],
     narrative_rows: list[dict],
     driver_rows: list[dict] | None = None,
     market_feature_rows: list[dict] | None = None,
     derivatives_feature_rows: list[dict] | None = None,
+    run_id: str | None = None,
+    artifact_version: str = "v1",
+    manifest_path: Path | None = None,
 ) -> dict:
     top_assets = attention_rows[:8]
     top_narratives = narrative_rows[:6]
@@ -190,9 +246,16 @@ def build_site_payload(
     bullish_count = sum(1 for row in attention_rows if row["regime_tag"] == "bullish_attention")
     bearish_count = sum(1 for row in attention_rows if row["regime_tag"] == "bearish_attention")
     mixed_count = sum(1 for row in attention_rows if row["regime_tag"] == "mixed_attention")
+    driver_mix = build_driver_mix(attention_rows)
+    narrative_health = build_narrative_health_rows(attention_rows, narrative_explorer_rows)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "run_metadata": {
+            "run_id": run_id or "local-run",
+            "artifact_version": artifact_version,
+            "manifest_path": str(manifest_path) if manifest_path else None,
+        },
         "headline": {
             "title": "Crypto Market Intelligence Lakehouse",
             "subtitle": "A Databricks-oriented market intelligence platform for spotting which crypto assets and narratives deserve attention, and why.",
@@ -203,11 +266,13 @@ def build_site_payload(
             "bullish_count": bullish_count,
             "bearish_count": bearish_count,
             "mixed_count": mixed_count,
+            "driver_mix": driver_mix,
         },
         "top_assets": top_assets,
         "top_narratives": top_narratives,
         "asset_explorer_rows": asset_explorer_rows,
         "narrative_explorer_rows": narrative_explorer_rows,
+        "narrative_health": narrative_health,
         "refresh_policy": {
             "trigger": "github_actions",
             "cadence_label": "Every 12 hours",
@@ -270,7 +335,13 @@ def resolve_export_roots(settings: AppSettings, *, project_root: Path = PROJECT_
     }
 
 
-def run_public_export_stage(settings: AppSettings) -> dict[str, Path]:
+def run_public_export_stage(
+    settings: AppSettings,
+    *,
+    run_id: str | None = None,
+    artifact_version: str = "v1",
+    manifest_path: Path | None = None,
+) -> dict[str, Path]:
     roots = resolve_export_roots(settings, project_root=PROJECT_ROOT)
     gold_root = roots["gold"]
     features_root = roots["features"]
@@ -311,6 +382,9 @@ def run_public_export_stage(settings: AppSettings) -> dict[str, Path]:
                 driver_rows=driver_rows,
                 market_feature_rows=market_feature_rows,
                 derivatives_feature_rows=derivatives_feature_rows,
+                run_id=run_id,
+                artifact_version=artifact_version,
+                manifest_path=manifest_path,
             )
         ),
         encoding="utf-8",

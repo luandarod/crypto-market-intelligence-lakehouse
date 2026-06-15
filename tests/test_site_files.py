@@ -48,3 +48,8 @@ def test_site_includes_blueprint_and_asset_explorer_hooks():
     assert "renderAppVisuals" in js
     assert 'id="app-refresh-note"' in app_html
     assert "renderAppRefreshStatus" in js
+    assert "run_metadata" in js
+    assert "driver_mix" in js
+    assert "narrative_health" in js
+    assert "formatDriverSummary" in js
+    assert "formatManifestPath" in js

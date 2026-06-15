@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from scripts.export_public_artifacts import build_site_data_script, build_site_payload
 
 
@@ -68,11 +70,21 @@ def test_build_site_payload_summarizes_attention_and_regimes():
                 "open_interest": 110567.575,
             }
         ],
+        run_id="run-demo",
+        artifact_version="v2",
+        manifest_path=Path("artifacts/public/run_manifest.json"),
     )
+    assert payload["run_metadata"]["run_id"] == "run-demo"
+    assert payload["run_metadata"]["artifact_version"] == "v2"
+    assert payload["run_metadata"]["manifest_path"].endswith("run_manifest.json")
     assert payload["overview"]["asset_count"] == 2
     assert payload["overview"]["narrative_count"] == 2
     assert payload["overview"]["bearish_count"] == 1
     assert payload["overview"]["mixed_count"] == 1
+    assert payload["overview"]["driver_mix"]["counts"]["derivatives_positioning"] == 1
+    assert payload["overview"]["driver_mix"]["counts"]["volume_strength"] == 1
+    assert payload["overview"]["driver_mix"]["counts"]["onchain_confirmation"] == 0
+    assert payload["overview"]["driver_mix"]["leading_driver"]["count"] == 1
     assert payload["top_assets"][0]["symbol"] == "BTC"
     assert payload["asset_explorer_rows"][0]["symbol"] == "BTC"
     assert payload["asset_explorer_rows"][0]["breadth_flag"] == "broad"
@@ -83,6 +95,9 @@ def test_build_site_payload_summarizes_attention_and_regimes():
     assert payload["narrative_explorer_rows"][0]["narrative"] == "bitcoin_ecosystem"
     assert payload["narrative_explorer_rows"][1]["leader_symbol"] == "SOL"
     assert payload["narrative_explorer_rows"][1]["asset_symbols"] == ["SOL"]
+    assert payload["narrative_health"][0]["leader_symbol"] == "BTC"
+    assert payload["narrative_health"][0]["leader_driver"] == "derivatives_positioning"
+    assert payload["narrative_health"][1]["leader_regime"] == "mixed_attention"
     assert payload["refresh_policy"]["cadence_label"] == "Every 12 hours"
     assert payload["refresh_policy"]["trigger"] == "github_actions"
 

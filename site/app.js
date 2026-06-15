@@ -89,6 +89,23 @@ function formatRegimeLabel(value) {
   return mapping[value] || formatNarrativeLabel(value);
 }
 
+function formatDriverSummary(driverMix) {
+  const leadingDriver = driverMix?.leading_driver || {};
+  if (!leadingDriver.name) {
+    return "N/A";
+  }
+  const shareLabel = formatPercent((leadingDriver.share || 0) * 100, 1);
+  return `${formatDriverLabel(leadingDriver.name)} / ${shareLabel}`;
+}
+
+function formatManifestPath(value) {
+  if (!value) {
+    return "N/A";
+  }
+  const parts = String(value).split(/[/\\\\]+/).filter(Boolean);
+  return parts.slice(-3).join("/");
+}
+
 function formatNumber(value, digits) {
   return new Intl.NumberFormat(numberLocale(), {
     minimumFractionDigits: digits,
@@ -258,6 +275,7 @@ function renderAppRefreshStatus(data) {
   const copy = appCopy();
   const watchLabel = commonCopy().watchLabel || "watch";
   const refreshPolicy = data.refresh_policy || {};
+  const runMetadata = data.run_metadata || {};
   const cadenceLabel = CURRENT_LOCALE === "pt-BR"
     ? "A cada 12 horas"
     : (refreshPolicy.cadence_label || "Manual refresh");
@@ -276,6 +294,8 @@ function renderAppRefreshStatus(data) {
     <p>
       <strong>${cadenceLabel}</strong> ${(copy.refreshCadencePrefix || "publishing cadence via")} ${triggerLabel}. ${cadenceDetail}
     </p>
+    <p class="app-mini-label">Run ${runMetadata.run_id || "local-run"} / Artifact ${runMetadata.artifact_version || "v1"}</p>
+    <p class="app-mini-label">Manifest ${formatManifestPath(runMetadata.manifest_path)}</p>
     <p class="app-mini-label">${formatGeneratedAt(data.generated_at)}</p>
   `;
 }
@@ -744,6 +764,7 @@ function renderAppInsights(data) {
 
   const topAsset = data.top_assets[0];
   const topNarrative = data.top_narratives[0];
+  const driverMix = data.overview?.driver_mix || {};
   const bearishShare = `${data.overview.bearish_count}/${data.overview.asset_count}`;
   const mixedShare = `${data.overview.mixed_count}/${data.overview.asset_count}`;
 
@@ -767,6 +788,11 @@ function renderAppInsights(data) {
       copy.chips?.topNarrative || "Top narrative",
       formatNarrativeLabel(topNarrative?.narrative || "N/A"),
       CURRENT_LOCALE === "pt-BR" ? "Cluster líder por atenção agregada." : "Leading cluster by aggregated attention.",
+    ),
+    buildAppChip(
+      copy.chips?.leadingDriver || "Leading driver",
+      formatDriverSummary(driverMix),
+      CURRENT_LOCALE === "pt-BR" ? "Mistura atual dos drivers mais relevantes na camada gold exportada." : "Current mix of the most relevant drivers in the exported gold layer.",
     ),
   );
 
@@ -797,6 +823,16 @@ function renderAppInsights(data) {
       copy.insights?.buildBody || "This app runs on the same generated payload used by the case study, which is the right boundary for evolving from portfolio artifact into a fuller analytical product.",
       "ops",
     ),
+    buildAppInsightCard(
+      copy.insights?.driverLabel || "Driver Read",
+      CURRENT_LOCALE === "pt-BR"
+        ? `${formatDriverLabel(driverMix.leading_driver?.name || "volume_strength")} domina a leitura atual`
+        : `${formatDriverLabel(driverMix.leading_driver?.name || "volume_strength")} dominates the current read`,
+      CURRENT_LOCALE === "pt-BR"
+        ? `O snapshot mostra ${driverMix.counts?.derivatives_positioning ?? 0} ativos puxados por derivativos, ${driverMix.counts?.onchain_confirmation ?? 0} por confirmacao on-chain e ${driverMix.counts?.volume_strength ?? 0} por forca de volume.`
+        : `The snapshot shows ${driverMix.counts?.derivatives_positioning ?? 0} assets led by derivatives, ${driverMix.counts?.onchain_confirmation ?? 0} by on-chain confirmation, and ${driverMix.counts?.volume_strength ?? 0} by volume strength.`,
+      "health",
+    ),
   );
 }
 
@@ -807,6 +843,7 @@ function renderAppCommandCenter(data) {
   if (!leaderboard || !rotationBoard || !alerts) {
     return;
   }
+  const narrativeHealth = data.narrative_health || [];
 
   data.top_assets.slice(0, 5).forEach((row) => {
     leaderboard.appendChild(
@@ -822,13 +859,16 @@ function renderAppCommandCenter(data) {
     );
   });
 
-  data.narrative_explorer_rows.slice(0, 4).forEach((row) => {
+  narrativeHealth.slice(0, 4).forEach((row) => {
     rotationBoard.appendChild(
       buildAppMiniItem(
         formatNarrativeLabel(row.narrative),
-        `Leader ${row.leader_symbol}`,
-        `${row.asset_count} assets / Avg attention ${formatNumber(row.avg_attention_score, 2)}`,
-        row.asset_symbols.slice(0, 4).map((symbol) => `<span class="tag">${symbol}</span>`),
+        `Leader ${row.leader_symbol || "N/A"}`,
+        `${row.asset_count} assets / Avg attention ${formatNumber(row.avg_attention_score, 2)} / ${formatDriverLabel(row.leader_driver || "volume_strength")}`,
+        [
+          buildTag(formatRegimeLabel(row.leader_regime || "mixed_attention"), regimeTone(row.leader_regime || "mixed_attention")),
+          `<span class="tag">${row.leader_symbol || "N/A"}</span>`,
+        ],
       ),
     );
   });
@@ -857,7 +897,7 @@ function renderAppCommandCenter(data) {
       ),
     );
   }
-  const topNarrative = data.narrative_explorer_rows[0];
+  const topNarrative = narrativeHealth[0];
   if (topNarrative) {
     alerts.appendChild(
       buildAlertItem(
@@ -866,7 +906,7 @@ function renderAppCommandCenter(data) {
           : `${formatNarrativeLabel(topNarrative.narrative)} is leading cluster rotation`,
         CURRENT_LOCALE === "pt-BR"
           ? `${formatNarrativeLabel(topNarrative.narrative)} hoje aparece em primeiro por atenção média e está sendo carregada por ${topNarrative.leader_symbol}.`
-          : `${formatNarrativeLabel(topNarrative.narrative)} currently ranks first by average attention and is being carried by ${topNarrative.leader_symbol}.`,
+          : `${formatNarrativeLabel(topNarrative.narrative)} currently ranks first by average attention, is led by ${topNarrative.leader_symbol}, and carries ${formatDriverLabel(topNarrative.leader_driver || "volume_strength")} as the primary driver.`,
         "bullish",
       ),
     );
@@ -1279,6 +1319,8 @@ function renderCaseStudyPage() {
   ];
 
   applySiteStaticCopy(data);
+  const driverMix = data.overview?.driver_mix || {};
+  const runMetadata = data.run_metadata || {};
 
   document.getElementById("hero-title").textContent = data.headline.title;
   document.getElementById("hero-subtitle").textContent = CURRENT_LOCALE === "pt-BR"
@@ -1303,6 +1345,11 @@ function renderCaseStudyPage() {
       data.overview.bearish_count,
       CURRENT_LOCALE === "pt-BR" ? "tag direcional atual da gold layer" : "current gold-layer directional tag",
     ),
+    buildHeroMetric(
+      CURRENT_LOCALE === "pt-BR" ? "Driver lider" : "Leading driver",
+      formatDriverSummary(driverMix),
+      CURRENT_LOCALE === "pt-BR" ? "mistura dominante de sinais no snapshot atual" : "dominant signal mix in the current snapshot",
+    ),
   );
 
   const overview = document.getElementById("overview");
@@ -1326,6 +1373,13 @@ function renderCaseStudyPage() {
     const value = item[1] === "dynamic_asset_count" ? String(data.overview.asset_count) : item[1] === "dynamic_narrative_count" ? String(data.overview.narrative_count) : item[1];
     buildStats.appendChild(buildFeaturedStat(item[0], value, item[2]));
   });
+  buildStats.appendChild(
+    buildFeaturedStat(
+      CURRENT_LOCALE === "pt-BR" ? "Execucao" : "Execution",
+      `Run ${runMetadata.run_id || "local-run"}`,
+      `Artifact ${runMetadata.artifact_version || "v1"} / Manifest ${formatManifestPath(runMetadata.manifest_path)}`,
+    ),
+  );
 
   const buildDetails = document.getElementById("build-details");
   buildDetails.innerHTML = "";
